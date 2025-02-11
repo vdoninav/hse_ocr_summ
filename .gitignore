@@ -1,3 +1,9 @@
 data/
 data.zip
 .DS_Store
+usecrets.py
+logs/
+proc_data/
+__pycache__/
+ru-mbart-large-summ/
+results_finetuning/
