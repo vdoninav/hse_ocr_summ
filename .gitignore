@@ -7,3 +7,4 @@ proc_data/
 __pycache__/
 ru-mbart-large-summ/
 results_finetuning/
+tuned/
