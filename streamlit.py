@@ -1,17 +1,25 @@
 import streamlit as st
 import torch
-from transformers import AutoTokenizer, MBartForConditionalGeneration, pipeline
+from transformers import (
+    AutoTokenizer,
+    MBartForConditionalGeneration,
+    MT5Tokenizer,
+    MT5ForConditionalGeneration,
+    pipeline,
+)
 import pytesseract
 import subprocess
 import os
+import time
 from pdf2image import convert_from_path
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-tokenizer_orig = AutoTokenizer.from_pretrained("models/ru-mbart-large-summ")
-model_orig = MBartForConditionalGeneration.from_pretrained(
-    "models/ru-mbart-large-summ"
-).to(device)
+
+orig_model = "models/ru-mbart-large-summ"
+tokenizer_orig = AutoTokenizer.from_pretrained(orig_model)
+model_orig = MBartForConditionalGeneration.from_pretrained(orig_model).to(device)
+
 summ_orig = pipeline(
     "summarization",
     device=0 if torch.cuda.is_available() else -1,
@@ -22,10 +30,9 @@ summ_orig = pipeline(
     min_length=60,
 )
 
-tokenizer_final = AutoTokenizer.from_pretrained("models/final_model")
-model_final = MBartForConditionalGeneration.from_pretrained("models/final_model").to(
-    device
-)
+final_model = "models/sota"
+tokenizer_final = AutoTokenizer.from_pretrained(final_model)
+model_final = MBartForConditionalGeneration.from_pretrained(final_model).to(device)
 summ_final = pipeline(
     "summarization",
     device=0 if torch.cuda.is_available() else -1,
@@ -64,12 +71,22 @@ def convert_doc_to_txt(doc_path):
 
 
 def ocr_pdf(pdf_path):
+    start_time = time.perf_counter()
+
     pages = convert_from_path(pdf_path, dpi=300)
     extracted_text = ""
 
-    for page in pages:
+    progress_container = st.empty()
+    progress_bar = progress_container.progress(0)
+    total_pages = len(pages)
+
+    for i, page in enumerate(pages):
         text = pytesseract.image_to_string(page, lang="rus")
         extracted_text += text
+        progress_bar.progress((i + 1) / total_pages)
+
+    progress_container.empty()
+    st.info(f"OCR Time: {time.perf_counter() - start_time:.2f} s")
 
     return extracted_text
 
@@ -94,6 +111,7 @@ def get_text_from_file(file_path):
 
 def summarize_long_text(text, summ, tokenizer, max_input_length=1024):
     full_ids = tokenizer.encode(text, add_special_tokens=True)
+
     if len(full_ids) <= max_input_length:
         truncated_text = tokenizer.decode(
             tokenizer.encode(
@@ -106,20 +124,24 @@ def summarize_long_text(text, summ, tokenizer, max_input_length=1024):
         )
         return summ(truncated_text)[0]["summary_text"]
     else:
+        overlap = 128
+        chunk_size = max_input_length
+
         progress_container = st.empty()
         progress_bar = progress_container.progress(0)
 
-        num_chunks = len(range(0, len(full_ids), max_input_length))
-        total_steps = num_chunks * 2 + 1
-        step = 0
-
         chunks = []
-        for i in range(0, len(full_ids), max_input_length):
-            chunk_ids = full_ids[i : i + max_input_length]
+        start = 0
+        step = chunk_size - overlap
+        while start < len(full_ids):
+            end = start + chunk_size
+            chunk_ids = full_ids[start:end]
             chunk_text = tokenizer.decode(chunk_ids, skip_special_tokens=True)
             chunks.append(chunk_text)
-            step += 1
-            progress_bar.progress(step / total_steps)
+            start += step
+
+        total_steps = len(chunks) * 2 + 1
+        step_count = 0
 
         chunk_summaries = []
         for chunk in chunks:
@@ -134,8 +156,9 @@ def summarize_long_text(text, summ, tokenizer, max_input_length=1024):
             )
             summary = summ(truncated_chunk)[0]["summary_text"]
             chunk_summaries.append(summary)
-            step += 1
-            progress_bar.progress(step / total_steps)
+            step_count += 1
+            progress_bar.progress(step_count / total_steps)
+            time.sleep(0.05)
 
         combined_summary = " ".join(chunk_summaries)
         truncated_combined = tokenizer.decode(
@@ -148,12 +171,22 @@ def summarize_long_text(text, summ, tokenizer, max_input_length=1024):
             skip_special_tokens=True,
         )
         final_summary = summ(truncated_combined)[0]["summary_text"]
-        step += 1
-        progress_bar.progress(step / total_steps)
+        step_count += 1
+        progress_bar.progress(step_count / total_steps)
+        time.sleep(0.05)
 
         progress_container.empty()
 
         return final_summary
+
+
+def run_summarization_with_timing(text, summ_pipeline, tokenizer, model_debug_name):
+    start_time = time.perf_counter()
+    summary = summarize_long_text(text, summ_pipeline, tokenizer)
+    end_time = time.perf_counter()
+
+    st.info(f"Summarize by [{model_debug_name}]: {end_time - start_time:.2f} s")
+    return summary
 
 
 st.title("HSE docs summ")
@@ -179,8 +212,18 @@ else:
 
 if st.button("Суммаризовать"):
     if input_text:
-        summary_orig = summarize_long_text(input_text, summ_orig, tokenizer_orig)
-        summary_final = summarize_long_text(input_text, summ_final, tokenizer_final)
+        summary_orig = run_summarization_with_timing(
+            input_text,
+            summ_orig,
+            tokenizer_orig,
+            orig_model,
+        )
+        summary_final = run_summarization_with_timing(
+            input_text,
+            summ_final,
+            tokenizer_final,
+            final_model,
+        )
 
         st.subheader("Суммаризация от исходной модели:")
         st.write(summary_orig)
