@@ -1,0 +1,31 @@
+# Учитель
+TEACHER_MODEL_NAME = "models/sota"
+
+# Общие гиперпараметры
+MAX_SOURCE_LEN = 1024
+MAX_TARGET_LEN = 128
+
+# Student
+EMBED_DIM = 512
+ENC_HIDDEN_DIM = 256
+DEC_HIDDEN_DIM = 512
+NUM_LAYERS = 2
+# PREV:  NUM_LAYERS = 1
+DROPOUT = 0.25
+# PREV:  DROPOUT = 0.2
+MHA_NUM_HEADS = 8
+
+# Обучение
+BATCH_SIZE = 4
+LEARNING_RATE = 1e-3
+NUM_EPOCHS = 50
+TEMPERATURE = 2.0
+
+# Beam Search
+BEAM_SIZE = 8
+BEAM_MAX_LENGTH = 128
+MIN_LEN = 10
+
+# Wandb
+WANDB_PROJECT = "coursework_2025"
+WANDB_RUN_NAME = "d6"

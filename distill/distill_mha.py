@@ -82,7 +82,7 @@ def beam_search_decode(
 
 
 # ====================== Дистилляция ======================
-def soft_cross_entropy(student_logits, teacher_logits, temperature=1.0):
+def soft_cross_entropy(student_logits, teacher_logits, temperature=2.0):
     teacher_probs = torch.nn.functional.softmax(teacher_logits / temperature, dim=-1)
     log_student_probs = torch.nn.functional.log_softmax(
         student_logits / temperature, dim=-1
@@ -172,9 +172,7 @@ def evaluate_student(
             dec_in = shift_tokens_right(
                 labels, tokenizer.pad_token_id, tokenizer.eos_token_id
             )
-            logits = model(
-                input_ids, dec_in, src_mask=src_mask
-            )  # (bs, tgt_len, vocab_size)
+            logits = model(input_ids, dec_in, src_mask=src_mask)
 
             vocab_size = logits.size(-1)
             logits_2d = logits.view(-1, vocab_size)
@@ -235,23 +233,12 @@ def train_distillation(
     tokenizer,
     num_epochs=3,
     lr=1e-3,
-    temperature=1.0,
+    temperature=2.0,
     device="cpu",
     wandb_run_name="default",
-    beam_size=32,
+    beam_size=8,
     beam_max_length=128,
 ):
-    """
-    Функция дистилляции:
-     - teacher_model: обученная модель (MBart)
-     - student_model: Bi-LSTM/LSTM+MHA/и т.д.
-     - train_dataloader: DataLoader с обучающей выборкой
-     - val_dataloader: DataLoader с валидационной выборкой
-     - tokenizer: токенайзер (MBart)
-     - num_epochs: количество эпох обучения
-     - lr: learning rate
-     - temperature: "температура" для soft-кросс-энтропии
-    """
 
     optimizer = optim.Adam(student_model.parameters(), lr=lr)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, factor=0.4)
