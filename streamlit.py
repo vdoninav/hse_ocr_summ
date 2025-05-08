@@ -111,7 +111,7 @@ def convert_docx_to_txt(docx_path):
 def convert_doc_to_txt(doc_path):
     try:
         result = subprocess.run(
-            ["textutil", "-convert", "txt", "-stdout", doc_path],
+            ["antiword", ">", doc_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -119,10 +119,10 @@ def convert_doc_to_txt(doc_path):
         if result.returncode == 0:
             return result.stdout
         else:
-            print("Ошибка:", result.stderr)
+            print("DOC processing error:", result.stderr)
             return ""
     except Exception as e:
-        print("Ошибка при запуске textutil/catdoc:", e)
+        print("DOC processing error (antiword):", e)
         return ""
 
 
